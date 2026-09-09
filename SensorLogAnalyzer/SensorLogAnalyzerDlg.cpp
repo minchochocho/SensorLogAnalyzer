@@ -213,6 +213,8 @@ void CSensorLogAnalyzerDlg::OnBnClickedButtonOpenCsv() {
 		AfxMessageBox(_T("CSV 파일이 비어 있습니다."));
 		return;
 	}
+	AfxMessageBox(_T("CSV 파일이 열렸습니다."));
+
 	
 	header.Trim();
 
