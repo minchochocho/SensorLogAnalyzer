@@ -186,8 +186,85 @@ void CSensorLogAnalyzerDlg::OnBnClickedButtonOpenCsv() {
 		return;
 	}
 
+	CString filePath = fileDialog.GetPathName();
+
 	SetDlgItemText(
 		IDC_EDIT_FILE_PATH,
 		fileDialog.GetPathName()
 	);
+
+	// CSV 파일 열기
+	CStdioFile file;
+
+	if (!file.Open(
+		filePath,
+		CFile::modeRead |
+		CFile::typeText |
+		CFile::shareDenyNone
+	)) {
+		AfxMessageBox(_T("CSV 파일을 열 수 없습니다"));
+		return;
+	}
+
+	// 첫 번째 줄 읽기
+	CString header;
+
+	if (!file.ReadString(header)) {
+		AfxMessageBox(_T("CSV 파일이 비어 있습니다."));
+		return;
+	}
+	
+	header.Trim();
+
+	if (header != _T("timestamp,distance_cm,light_adc")) {
+		file.Close();
+		AfxMessageBox(_T("CSV 헤더 형식이 올바르지 않습니다."));
+		return;
+	}
+	
+	// 이전 목록 데이터 제거
+	m_sensorList.DeleteAllItems();
+
+	CString line;
+	int rowNumber = 0;
+
+	while (file.ReadString(line)) {
+		line.Trim();
+
+		// 빈 줄 건너뜀
+		if (line.IsEmpty()) {
+			continue;
+		}
+		rowNumber++;
+
+		CString timestamp;
+		CString distance;
+		CString light;
+
+		// 쉼표를 기준으로 앞의 3개 값 분리
+		AfxExtractSubString(timestamp, line, 0, _T(','));
+		AfxExtractSubString(distance, line, 1, _T(','));
+		AfxExtractSubString(light, line, 2, _T(','));
+
+		CString rowText;
+		rowText.Format(_T("%d"), rowNumber);
+
+		int listIndex = m_sensorList.InsertItem(
+			m_sensorList.GetItemCount(),
+			rowText		
+		);
+
+		m_sensorList.SetItemText(listIndex, 1, timestamp);
+		m_sensorList.SetItemText(listIndex, 2, distance);
+		m_sensorList.SetItemText(listIndex, 3, light);
+	}
+
+	file.Close();
+
+	CString message;
+	message.Format(_T("%d개의 데이터 행을 읽었습니다."), rowNumber);
+	AfxMessageBox(message);
+
+
+
 }
