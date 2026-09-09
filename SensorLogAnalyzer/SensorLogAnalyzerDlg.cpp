@@ -59,12 +59,14 @@ CSensorLogAnalyzerDlg::CSensorLogAnalyzerDlg(CWnd* pParent /*=nullptr*/)
 void CSensorLogAnalyzerDlg::DoDataExchange(CDataExchange* pDX)
 {
 	CDialogEx::DoDataExchange(pDX);
+	DDX_Control(pDX, IDC_LIST_SENSOR_DATA, m_sensorList);
 }
 
 BEGIN_MESSAGE_MAP(CSensorLogAnalyzerDlg, CDialogEx)
 	ON_WM_SYSCOMMAND()
 	ON_WM_PAINT()
 	ON_WM_QUERYDRAGICON()
+	ON_BN_CLICKED(IDC_BUTTON_OPEN_CSV, &CSensorLogAnalyzerDlg::OnBnClickedButtonOpenCsv)
 END_MESSAGE_MAP()
 
 
@@ -100,6 +102,22 @@ BOOL CSensorLogAnalyzerDlg::OnInitDialog()
 	SetIcon(m_hIcon, FALSE);		// 작은 아이콘을 설정합니다.
 
 	// TODO: 여기에 추가 초기화 작업을 추가합니다.
+	// 행 전체 선택과 격자선 표시
+	m_sensorList.SetExtendedStyle(
+		m_sensorList.GetExtendedStyle()
+		| LVS_EX_FULLROWSELECT
+		| LVS_EX_GRIDLINES
+		| LVS_EX_DOUBLEBUFFER
+	);
+
+	// 데이터 열 구성
+	m_sensorList.InsertColumn(0, _T("행"), LVCFMT_RIGHT, 60);
+	m_sensorList.InsertColumn(1, _T("시간"), LVCFMT_LEFT, 170);
+	m_sensorList.InsertColumn(2, _T("거리(cm)"), LVCFMT_RIGHT, 110);
+	m_sensorList.InsertColumn(3, _T("조도(ADC)"), LVCFMT_RIGHT, 110);
+	m_sensorList.InsertColumn(4, _T("거리 상태"), LVCFMT_LEFT, 110);
+	m_sensorList.InsertColumn(5, _T("밝기 상태"), LVCFMT_LEFT, 110);
+	m_sensorList.InsertColumn(6, _T("오류 내용"), LVCFMT_LEFT, 180);
 
 	return TRUE;  // 포커스를 컨트롤에 설정하지 않으면 TRUE를 반환합니다.
 }
@@ -153,3 +171,23 @@ HCURSOR CSensorLogAnalyzerDlg::OnQueryDragIcon()
 	return static_cast<HCURSOR>(m_hIcon);
 }
 
+// CSV 열기 버튼
+void CSensorLogAnalyzerDlg::OnBnClickedButtonOpenCsv() {
+	CFileDialog fileDialog(
+		TRUE,
+		_T("csv"),
+		nullptr,
+		OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST,
+		_T("CSV 파일 (*.csv)|*.csv|모든 파일 (*.*)|*.*||"),
+		this
+	);
+
+	if (fileDialog.DoModal() != IDOK) {
+		return;
+	}
+
+	SetDlgItemText(
+		IDC_EDIT_FILE_PATH,
+		fileDialog.GetPathName()
+	);
+}
