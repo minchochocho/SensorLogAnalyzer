@@ -321,6 +321,8 @@ void CSensorLogAnalyzerDlg::OnBnClickedButtonOpenCsv() {
 
 	CString line;
 	int rowNumber = 0;
+	int validCount = 0;
+	int errorCount = 0;
 
 	while (file.ReadString(line)) {
 		line.Trim();
@@ -386,6 +388,13 @@ void CSensorLogAnalyzerDlg::OnBnClickedButtonOpenCsv() {
 			errorMessage = _T("조도 범위 오류");
 		}
 
+		if (errorMessage.IsEmpty()) {
+			validCount++;
+		}
+		else {
+			errorCount++;
+		}
+
 		CString rowText;
 		rowText.Format(_T("%d"), rowNumber);
 
@@ -403,7 +412,12 @@ void CSensorLogAnalyzerDlg::OnBnClickedButtonOpenCsv() {
 	file.Close();
 
 	CString message;
-	message.Format(_T("%d개의 데이터 행을 읽었습니다."), rowNumber);
+	message.Format(
+		_T("전체 %d행\n정상 %d행\n오류 %d행"),
+		rowNumber,
+		validCount,
+		errorCount
+	);
 	AfxMessageBox(message);
 
 
