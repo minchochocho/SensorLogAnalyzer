@@ -7,11 +7,53 @@
 #include "SensorLogAnalyzer.h"
 #include "SensorLogAnalyzerDlg.h"
 #include "afxdialogex.h"
+#include <cmath>
+#include <cerrno>
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
 #endif
 
+namespace {
+
+	// 실수(float) 검사, 거리(distance)가 숫자고 허용 범위 안인지
+	bool TryParseDistance(const CString& text, double& value) {
+		const TCHAR* start = text.GetString();
+		TCHAR* end = nullptr;
+
+		errno = 0;
+		value = _tcstod(start, &end);
+
+		if (end == start ||
+			*end != _T('\0')||
+			errno == ERANGE ||
+			!std::isfinite(value)
+		)
+		{
+			return false;
+		}
+
+		return true;
+	}
+
+	// 정수 검사
+	bool TryParseAdc(const CString& text, long& value) {
+		const TCHAR* start = text.GetString();
+		TCHAR* end = nullptr;
+
+		errno = 0;
+		value = _tcstol(start, &end, 10);
+
+		if (end == start ||
+			*end != _T('\0') ||
+			errno == ERANGE
+		) 
+		{
+			return false;
+		}
+		return true;
+	}
+}
 
 // 응용 프로그램 정보에 사용되는 CAboutDlg 대화 상자입니다.
 
@@ -248,6 +290,49 @@ void CSensorLogAnalyzerDlg::OnBnClickedButtonOpenCsv() {
 		AfxExtractSubString(distance, line, 1, _T(','));
 		AfxExtractSubString(light, line, 2, _T(','));
 
+		timestamp.Trim();
+		distance.Trim();
+		light.Trim();
+
+		CString errorMessage;
+		double distanceValue = 0.0;
+		long lightValue = 0;
+
+		// 쉼표 개수 확인
+		int commaCount = 0;
+
+		for (int i = 0; i < line.GetLength(); i++) {
+			if (line[i]==_T(',')) {
+				commaCount++;
+			}
+		}
+
+		// 열은 정확하게 3개여야 하므로 쉼표는 2개
+		if (commaCount !=2) {
+			errorMessage = _T("열 개수 오류");
+		}
+		else if (timestamp.IsEmpty()) {
+			errorMessage = _T("시간 누락");
+		}
+		else if (distance.IsEmpty()) {
+			errorMessage = _T("거리 누락");
+		}
+		else if (light.IsEmpty()) {
+			errorMessage = _T("조도 누락");
+		}
+		else if (!TryParseDistance(distance, distanceValue)) {
+			errorMessage = _T("거리 숫자 형식 오류");
+		}
+		else if (distanceValue <= 0.0 || distanceValue > 400.0) {
+			errorMessage = _T("거리 범위 오류");
+		}
+		else if (!TryParseAdc(light,lightValue)) {
+			errorMessage = _T("조도 숫자 형식 오류");
+		}
+		else if (lightValue < 0 || lightValue > 255) {
+			errorMessage = _T("조도 범위 오류");
+		}
+
 		CString rowText;
 		rowText.Format(_T("%d"), rowNumber);
 
@@ -259,6 +344,7 @@ void CSensorLogAnalyzerDlg::OnBnClickedButtonOpenCsv() {
 		m_sensorList.SetItemText(listIndex, 1, timestamp);
 		m_sensorList.SetItemText(listIndex, 2, distance);
 		m_sensorList.SetItemText(listIndex, 3, light);
+		m_sensorList.SetItemText(listIndex, 6, errorMessage);
 	}
 
 	file.Close();
