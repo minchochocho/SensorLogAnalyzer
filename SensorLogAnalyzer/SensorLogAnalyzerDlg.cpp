@@ -53,6 +53,56 @@ namespace {
 		}
 		return true;
 	}
+
+	// 날짜 시간 형식과 실제 유효성 검사
+	bool TryParseTimestamp(const CString& text) {
+		// yyyy-MM-dd HH:mm:ss 형식인지 검사
+		if (text.GetLength() != 19) {
+			return false;
+		}
+		
+		// 구분자 위치 검사
+		if (text[4] != _T('-') ||
+			text[7] != _T('-') ||
+			text[10] != _T(' ') ||
+			text[13] != _T(':') ||
+			text[16] != _T(':')
+		) 
+		{
+			return false;
+		}
+
+		// 구분자를 제외한 위치는 모두 숫자여야 함
+		for (int i = 0; i < text.GetLength(); i++) {
+			if (i==4|| i == 7 || i == 10 || 
+				i == 13 || i == 16 ) {
+				continue;
+			}
+			// _istdigit 숫자를 판단하는 함수
+			if (!_istdigit(text[i])) {
+				return false;
+			}
+		}
+
+		SYSTEMTIME systemTime = {};
+
+		// static_cast - 타입캐스트 연산자로 compile 타임에 형변환에 대한 타입오류를 잡아줌
+		// _ttoi - CString형을 숫자로 변경
+		systemTime.wYear = static_cast<WORD>(_ttoi(text.Mid(0, 4)));
+		systemTime.wMonth = static_cast<WORD>(_ttoi(text.Mid(5, 2)));
+		systemTime.wDay = static_cast<WORD>(_ttoi(text.Mid(8, 2)));
+		systemTime.wHour = static_cast<WORD>(_ttoi(text.Mid(11, 2)));
+		systemTime.wMinute = static_cast<WORD>(_ttoi(text.Mid(14, 2)));
+		systemTime.wSecond = static_cast<WORD>(_ttoi(text.Mid(17, 2)));
+
+		// 존재하지 않는 날짜나 시간을 Windows API로 검증
+		FILETIME fileTime = {};
+
+		return SystemTimeToFileTime(
+			&systemTime,
+			&fileTime
+		) != FALSE;
+	}
 }
 
 // 응용 프로그램 정보에 사용되는 CAboutDlg 대화 상자입니다.
@@ -313,6 +363,9 @@ void CSensorLogAnalyzerDlg::OnBnClickedButtonOpenCsv() {
 		}
 		else if (timestamp.IsEmpty()) {
 			errorMessage = _T("시간 누락");
+		}
+		else if (!TryParseTimestamp(timestamp)) {
+			errorMessage = _T("시간 형식 또는 범위 오류");
 		}
 		else if (distance.IsEmpty()) {
 			errorMessage = _T("거리 누락");
