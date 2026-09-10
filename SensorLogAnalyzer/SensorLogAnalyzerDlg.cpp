@@ -103,6 +103,25 @@ namespace {
 			&fileTime
 		) != FALSE;
 	}
+
+	// 거리 위험도 판정
+	CString GetDistanceStatus(double distance) {
+		if (distance <= 30.0) {
+			return _T("위험");
+		}
+		if (distance <= 60.0) {
+			return _T("주의");
+		}
+		return _T("안전");
+	}
+
+	// 조도 판정
+	CString GetLightStatus(long lightAdc) {
+		if (lightAdc >= 190) {
+			return _T("어두움");
+		}
+		return _T("밝음");
+	}
 }
 
 // 응용 프로그램 정보에 사용되는 CAboutDlg 대화 상자입니다.
@@ -347,6 +366,9 @@ void CSensorLogAnalyzerDlg::OnBnClickedButtonOpenCsv() {
 		light.Trim();
 
 		CString errorMessage;
+		CString distanceStatus;
+		CString lightStatus;
+
 		double distanceValue = 0.0;
 		long lightValue = 0;
 
@@ -390,6 +412,9 @@ void CSensorLogAnalyzerDlg::OnBnClickedButtonOpenCsv() {
 
 		if (errorMessage.IsEmpty()) {
 			validCount++;
+
+			distanceStatus = GetDistanceStatus(distanceValue);
+			lightStatus = GetLightStatus(lightValue);
 		}
 		else {
 			errorCount++;
@@ -406,6 +431,8 @@ void CSensorLogAnalyzerDlg::OnBnClickedButtonOpenCsv() {
 		m_sensorList.SetItemText(listIndex, 1, timestamp);
 		m_sensorList.SetItemText(listIndex, 2, distance);
 		m_sensorList.SetItemText(listIndex, 3, light);
+		m_sensorList.SetItemText(listIndex, 4, distanceStatus);
+		m_sensorList.SetItemText(listIndex, 5, lightStatus);
 		m_sensorList.SetItemText(listIndex, 6, errorMessage);
 	}
 
