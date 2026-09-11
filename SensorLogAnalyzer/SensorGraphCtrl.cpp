@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "SensorGraphCtrl.h"
+#include <cmath>
 
 void CSensorGraphCtrl::SetData(
     const std::vector<double>& values,
@@ -16,10 +17,10 @@ void CSensorGraphCtrl::SetData(
 }
 
 void CSensorGraphCtrl::DrawItem(
-	LPDRAWITEMSTRUCT lpDrawItemStruct
+    LPDRAWITEMSTRUCT lpDrawItemStruct
 ) {
-	CDC* dc = CDC::FromHandle(lpDrawItemStruct->hDC);
-	CRect clientRect(lpDrawItemStruct->rcItem);
+    CDC* dc = CDC::FromHandle(lpDrawItemStruct->hDC);
+    CRect clientRect(lpDrawItemStruct->rcItem);
     dc->FillSolidRect(clientRect, RGB(255, 255, 255));
 
     CRect graphRect = clientRect;
@@ -54,11 +55,48 @@ void CSensorGraphCtrl::DrawItem(
 
     dc->Rectangle(graphRect);
 
+    // 세로축 눈금값
+    dc->SetBkMode(TRANSPARENT);
+    dc->SetTextColor(RGB(80, 80, 80));
+
+    for (int i = 0; i <= 5; i++) {
+        double value = m_maxValue * (5 - i) / 5.0;
+
+        int y = graphRect.top
+            + graphRect.Height() * i / 5;
+
+        CString label;
+        label.Format(_T("%.0f"), value);
+
+        CRect labelRect(
+            clientRect.left,
+            y - 9,
+            graphRect.left - 5,
+            y + 9
+        );
+
+        dc->DrawText(
+            label,
+            labelRect,
+            DT_RIGHT | DT_VCENTER | DT_SINGLELINE
+        );
+    }
+
+    // 선 그리기
     if (m_values.size() >= 2) {
-        std::vector<CPoint> points;
+        CPen dataPen(PS_SOLID, 2, m_lineColor);
+        CPen* previousPen = dc->SelectObject(&dataPen);
+
+        bool hasPreviousPoint = false;
 
         for (size_t i = 0; i < m_values.size(); i++) {
             double value = m_values[i];
+
+            // 오류 행을 만나면 현재 선을 끊음
+            if (!std::isfinite(value)) {
+                hasPreviousPoint = false;
+                continue;
+            }
 
             if (value < 0.0) {
                 value = 0.0;
@@ -79,20 +117,15 @@ void CSensorGraphCtrl::DrawItem(
                     / m_maxValue
                     );
 
-            points.emplace_back(x, y);
+            if (!hasPreviousPoint) {
+                dc->MoveTo(x, y);
+                hasPreviousPoint = true;
+            }
+            else {
+                dc->LineTo(x, y);
+            }
         }
-
-        CPen dataPen(PS_SOLID, 2, m_lineColor);
-        CPen* previousPen = dc->SelectObject(&dataPen);
-
-        dc->Polyline(
-            points.data(),
-            static_cast<int>(points.size())
-        );
 
         dc->SelectObject(previousPen);
     }
-
-    dc->SelectObject(oldBrush);
-    dc->SelectObject(oldPen);
 }

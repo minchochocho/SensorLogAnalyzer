@@ -9,6 +9,7 @@
 #include "afxdialogex.h"
 #include <cmath>
 #include <cerrno>
+#include <limits>
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -524,15 +525,22 @@ void CSensorLogAnalyzerDlg::RefreshGraphs() {
 	std::vector<double> distanceValues;
 	std::vector<double> lightValues;
 
-	for (const SensorRecord& record : m_sensorRecords) {
-		if (!record.isValid) {
-			continue;
-		}
+	const double missingValue =
+		std::numeric_limits<double>::quiet_NaN();
 
-		distanceValues.push_back(record.distanceValue);
-		lightValues.push_back(
-			static_cast<double>(record.lightValue)
-		);
+	for (const SensorRecord& record : m_sensorRecords) {
+		if (record.isValid) {
+			distanceValues.push_back(record.distanceValue);
+
+			lightValues.push_back(
+				static_cast<double>(record.lightValue)
+			);
+		}
+		else {
+			// 오류 행의 위치는 유지하고 값만 없는 것으로 표시
+			distanceValues.push_back(missingValue);
+			lightValues.push_back(missingValue);
+		}
 	}
 
 	m_distanceGraph.SetData(
