@@ -247,18 +247,6 @@ BOOL CSensorLogAnalyzerDlg::OnInitDialog()
 		SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE
 	);
 
-	m_distanceGraph.SetData(
-		{ 120.0, 90.0, 60.0, 30.0, 15.0, 45.0 },
-		400.0,
-		RGB(40, 110, 220)
-	);
-
-	m_lightGraph.SetData(
-		{ 80.0, 100.0, 140.0, 190.0, 230.0, 160.0 },
-		255.0,
-		RGB(240, 150, 30)
-	);
-
 	return TRUE;  // 포커스를 컨트롤에 설정하지 않으면 TRUE를 반환합니다.
 }
 
@@ -459,12 +447,17 @@ void CSensorLogAnalyzerDlg::OnBnClickedButtonOpenCsv() {
 		record.distanceStatus = distanceStatus;
 		record.lightStatus = lightStatus;
 		record.errorMessage = errorMessage;
+		record.distanceValue = distanceValue;
+		record.lightValue = lightValue;
+		record.isValid = errorMessage.IsEmpty();
 
 		m_sensorRecords.push_back(record);
 	}
 
 	file.Close();
+
 	RefreshSensorList();
+	RefreshGraphs();
 
 	CString message;
 	message.Format(
@@ -524,4 +517,33 @@ void CSensorLogAnalyzerDlg::RefreshSensorList()
 		m_sensorList.SetItemText(listIndex, 5, record.lightStatus);
 		m_sensorList.SetItemText(listIndex, 6, record.errorMessage);
 	}
+}
+
+// 그래프 갱신 함수
+void CSensorLogAnalyzerDlg::RefreshGraphs() {
+	std::vector<double> distanceValues;
+	std::vector<double> lightValues;
+
+	for (const SensorRecord& record : m_sensorRecords) {
+		if (!record.isValid) {
+			continue;
+		}
+
+		distanceValues.push_back(record.distanceValue);
+		lightValues.push_back(
+			static_cast<double>(record.lightValue)
+		);
+	}
+
+	m_distanceGraph.SetData(
+		distanceValues,
+		400.0,
+		RGB(40, 110, 220)
+	);
+
+	m_lightGraph.SetData(
+		lightValues,
+		255.0,
+		RGB(240, 150, 30)
+	);
 }

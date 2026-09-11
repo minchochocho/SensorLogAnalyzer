@@ -7,15 +7,19 @@
 #include "SensorGraphCtrl.h"
 #include <vector>
 
-struct SensorRecord
-{
+struct SensorRecord {
 	int rowNumber = 0;
+
 	CString timestamp;
 	CString distance;
 	CString light;
 	CString distanceStatus;
 	CString lightStatus;
 	CString errorMessage;
+
+	double distanceValue = 0.0;
+	long lightValue = 0;
+	bool isValid = false;
 };
 
 
@@ -56,5 +60,7 @@ public:
 
 private:
 	std::vector<SensorRecord> m_sensorRecords;
+
 	void RefreshSensorList();
+	void RefreshGraphs();
 };
