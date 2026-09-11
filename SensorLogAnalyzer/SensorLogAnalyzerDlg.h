@@ -4,6 +4,20 @@
 
 #pragma once
 
+#include "SensorGraphCtrl.h"
+#include <vector>
+
+struct SensorRecord
+{
+	int rowNumber = 0;
+	CString timestamp;
+	CString distance;
+	CString light;
+	CString distanceStatus;
+	CString lightStatus;
+	CString errorMessage;
+};
+
 
 // CSensorLogAnalyzerDlg 대화 상자
 class CSensorLogAnalyzerDlg : public CDialogEx
@@ -34,4 +48,13 @@ protected:
 public:
 	afx_msg void OnBnClickedButtonOpenCsv();
 	CListCtrl m_sensorList;
+	afx_msg void OnTcnSelchangeTab1(NMHDR* pNMHDR, LRESULT* pResult);
+	CTabCtrl m_dataFilterTab;
+
+	CSensorGraphCtrl m_distanceGraph;
+	CSensorGraphCtrl m_lightGraph;
+
+private:
+	std::vector<SensorRecord> m_sensorRecords;
+	void RefreshSensorList();
 };

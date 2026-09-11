@@ -142,14 +142,15 @@ public:
 // 구현입니다.
 protected:
 	DECLARE_MESSAGE_MAP()
+
 };
 
 CAboutDlg::CAboutDlg() : CDialogEx(IDD_ABOUTBOX)
 {
+
 }
 
-void CAboutDlg::DoDataExchange(CDataExchange* pDX)
-{
+void CAboutDlg::DoDataExchange(CDataExchange* pDX) {
 	CDialogEx::DoDataExchange(pDX);
 }
 
@@ -171,6 +172,10 @@ void CSensorLogAnalyzerDlg::DoDataExchange(CDataExchange* pDX)
 {
 	CDialogEx::DoDataExchange(pDX);
 	DDX_Control(pDX, IDC_LIST_SENSOR_DATA, m_sensorList);
+	DDX_Control(pDX, IDC_TAB_DATA_FILTER, m_dataFilterTab);
+	DDX_Control(pDX, IDC_STATIC_DISTANCE_GRAPH, m_distanceGraph);
+	DDX_Control(pDX, IDC_STATIC_LIGHT_GRAPH, m_lightGraph);
+
 }
 
 BEGIN_MESSAGE_MAP(CSensorLogAnalyzerDlg, CDialogEx)
@@ -178,6 +183,7 @@ BEGIN_MESSAGE_MAP(CSensorLogAnalyzerDlg, CDialogEx)
 	ON_WM_PAINT()
 	ON_WM_QUERYDRAGICON()
 	ON_BN_CLICKED(IDC_BUTTON_OPEN_CSV, &CSensorLogAnalyzerDlg::OnBnClickedButtonOpenCsv)
+	ON_NOTIFY(TCN_SELCHANGE, IDC_TAB_DATA_FILTER, &CSensorLogAnalyzerDlg::OnTcnSelchangeTab1)
 END_MESSAGE_MAP()
 
 
@@ -229,6 +235,29 @@ BOOL CSensorLogAnalyzerDlg::OnInitDialog()
 	m_sensorList.InsertColumn(4, _T("거리 상태"), LVCFMT_LEFT, 110);
 	m_sensorList.InsertColumn(5, _T("밝기 상태"), LVCFMT_LEFT, 110);
 	m_sensorList.InsertColumn(6, _T("오류 내용"), LVCFMT_LEFT, 180);
+
+	m_dataFilterTab.InsertItem(0, _T("전체 데이터"));
+	m_dataFilterTab.InsertItem(1, _T("유효 데이터"));
+	m_dataFilterTab.InsertItem(2, _T("오류 데이터"));
+	m_dataFilterTab.SetCurSel(0);
+
+	m_sensorList.SetWindowPos(
+		&CWnd::wndTop,
+		0, 0, 0, 0,
+		SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE
+	);
+
+	m_distanceGraph.SetData(
+		{ 120.0, 90.0, 60.0, 30.0, 15.0, 45.0 },
+		400.0,
+		RGB(40, 110, 220)
+	);
+
+	m_lightGraph.SetData(
+		{ 80.0, 100.0, 140.0, 190.0, 230.0, 160.0 },
+		255.0,
+		RGB(240, 150, 30)
+	);
 
 	return TRUE;  // 포커스를 컨트롤에 설정하지 않으면 TRUE를 반환합니다.
 }
@@ -336,6 +365,7 @@ void CSensorLogAnalyzerDlg::OnBnClickedButtonOpenCsv() {
 	}
 	
 	// 이전 목록 데이터 제거
+	m_sensorRecords.clear();
 	m_sensorList.DeleteAllItems();
 
 	CString line;
@@ -420,23 +450,21 @@ void CSensorLogAnalyzerDlg::OnBnClickedButtonOpenCsv() {
 			errorCount++;
 		}
 
-		CString rowText;
-		rowText.Format(_T("%d"), rowNumber);
+		SensorRecord record;
 
-		int listIndex = m_sensorList.InsertItem(
-			m_sensorList.GetItemCount(),
-			rowText		
-		);
+		record.rowNumber = rowNumber;
+		record.timestamp = timestamp;
+		record.distance = distance;
+		record.light = light;
+		record.distanceStatus = distanceStatus;
+		record.lightStatus = lightStatus;
+		record.errorMessage = errorMessage;
 
-		m_sensorList.SetItemText(listIndex, 1, timestamp);
-		m_sensorList.SetItemText(listIndex, 2, distance);
-		m_sensorList.SetItemText(listIndex, 3, light);
-		m_sensorList.SetItemText(listIndex, 4, distanceStatus);
-		m_sensorList.SetItemText(listIndex, 5, lightStatus);
-		m_sensorList.SetItemText(listIndex, 6, errorMessage);
+		m_sensorRecords.push_back(record);
 	}
 
 	file.Close();
+	RefreshSensorList();
 
 	CString message;
 	message.Format(
@@ -447,6 +475,53 @@ void CSensorLogAnalyzerDlg::OnBnClickedButtonOpenCsv() {
 	);
 	AfxMessageBox(message);
 
+}
 
+// 탭 전환 함수
+void CSensorLogAnalyzerDlg::OnTcnSelchangeTab1(
+	NMHDR* pNMHDR,
+	LRESULT* pResult
+) {
+	UNREFERENCED_PARAMETER(pNMHDR);
+	RefreshSensorList();
 
+	*pResult = 0;
+}
+
+void CSensorLogAnalyzerDlg::RefreshSensorList()
+{
+	m_sensorList.DeleteAllItems();
+
+	const int selectedTab = m_dataFilterTab.GetCurSel();
+
+	for (const SensorRecord& record : m_sensorRecords)
+	{
+		const bool isValid = record.errorMessage.IsEmpty();
+
+		// 0: 전체 데이터, 1: 유효 데이터, 2: 오류 데이터
+		if (selectedTab == 1 && !isValid)
+		{
+			continue;
+		}
+
+		if (selectedTab == 2 && isValid)
+		{
+			continue;
+		}
+
+		CString rowText;
+		rowText.Format(_T("%d"), record.rowNumber);
+
+		const int listIndex = m_sensorList.InsertItem(
+			m_sensorList.GetItemCount(),
+			rowText
+		);
+
+		m_sensorList.SetItemText(listIndex, 1, record.timestamp);
+		m_sensorList.SetItemText(listIndex, 2, record.distance);
+		m_sensorList.SetItemText(listIndex, 3, record.light);
+		m_sensorList.SetItemText(listIndex, 4, record.distanceStatus);
+		m_sensorList.SetItemText(listIndex, 5, record.lightStatus);
+		m_sensorList.SetItemText(listIndex, 6, record.errorMessage);
+	}
 }
