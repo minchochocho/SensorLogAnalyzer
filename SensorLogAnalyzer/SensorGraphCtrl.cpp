@@ -4,10 +4,12 @@
 
 void CSensorGraphCtrl::SetData(
     const std::vector<double>& values,
+    const std::vector<CString>& labels,
     double maxValue,
     COLORREF lineColor
 ) {
     m_values = values;
+    m_labels = labels;
     m_maxValue = maxValue > 0.0 ? maxValue : 1.0;
     m_lineColor = lineColor;
 
@@ -82,6 +84,69 @@ void CSensorGraphCtrl::DrawItem(
         );
     }
 
+    // 가로축에는 처음, 중간, 마지막 측정 시각만 표시
+    if (!m_labels.empty() && m_labels.size() == m_values.size()) {
+        const size_t labelCount =
+            m_labels.size() < 3 ? m_labels.size() : 3;
+
+        for (size_t slot = 0; slot < labelCount; slot++) {
+            size_t index = 0;
+
+            if (labelCount > 1) {
+                index = slot * (m_labels.size() - 1)
+                    / (labelCount - 1);
+            }
+
+            const CString& label = m_labels[index];
+
+            if (label.IsEmpty()) {
+                continue;
+            }
+
+            int x = graphRect.left;
+
+            if (m_labels.size() > 1) {
+                x += static_cast<int>(
+                    index * graphRect.Width()
+                    / (m_labels.size() - 1)
+                );
+            }
+
+            CRect textRect;
+            UINT textFormat = DT_SINGLELINE | DT_VCENTER;
+
+            if (slot == 0) {
+                textRect.SetRect(
+                    graphRect.left,
+                    graphRect.bottom + 5,
+                    graphRect.left + 70,
+                    clientRect.bottom
+                );
+                textFormat |= DT_LEFT;
+            }
+            else if (slot == labelCount - 1) {
+                textRect.SetRect(
+                    graphRect.right - 70,
+                    graphRect.bottom + 5,
+                    graphRect.right,
+                    clientRect.bottom
+                );
+                textFormat |= DT_RIGHT;
+            }
+            else {
+                textRect.SetRect(
+                    x - 40,
+                    graphRect.bottom + 5,
+                    x + 40,
+                    clientRect.bottom
+                );
+                textFormat |= DT_CENTER;
+            }
+
+            dc->DrawText(label, textRect, textFormat);
+        }
+    }
+
     // 선 그리기
     if (m_values.size() >= 2) {
         CPen dataPen(PS_SOLID, 2, m_lineColor);
@@ -128,4 +193,7 @@ void CSensorGraphCtrl::DrawItem(
 
         dc->SelectObject(previousPen);
     }
+
+    dc->SelectObject(oldBrush);
+    dc->SelectObject(oldPen);
 }

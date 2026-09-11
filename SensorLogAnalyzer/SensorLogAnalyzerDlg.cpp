@@ -524,6 +524,7 @@ void CSensorLogAnalyzerDlg::RefreshSensorList()
 void CSensorLogAnalyzerDlg::RefreshGraphs() {
 	std::vector<double> distanceValues;
 	std::vector<double> lightValues;
+	std::vector<CString> timeLabels;
 
 	const double missingValue =
 		std::numeric_limits<double>::quiet_NaN();
@@ -541,16 +542,27 @@ void CSensorLogAnalyzerDlg::RefreshGraphs() {
 			distanceValues.push_back(missingValue);
 			lightValues.push_back(missingValue);
 		}
+
+		CString timeLabel;
+
+		if (TryParseTimestamp(record.timestamp)) {
+			// yyyy-MM-dd HH:mm:ss 중 시각 부분만 그래프에 표시
+			timeLabel = record.timestamp.Mid(11, 8);
+		}
+
+		timeLabels.push_back(timeLabel);
 	}
 
 	m_distanceGraph.SetData(
 		distanceValues,
+		timeLabels,
 		400.0,
 		RGB(40, 110, 220)
 	);
 
 	m_lightGraph.SetData(
 		lightValues,
+		timeLabels,
 		255.0,
 		RGB(240, 150, 30)
 	);
