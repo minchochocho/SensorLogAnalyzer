@@ -106,22 +106,83 @@ namespace {
 	}
 
 	// 거리 위험도 판정
-	CString GetDistanceStatus(double distance) {
-		if (distance <= 30.0) {
+	CString GetDistanceStatus(
+		double distance,
+		double dangerDistance,
+		double cautionDistance
+	) {
+		if (distance <= dangerDistance) {
 			return _T("위험");
 		}
-		if (distance <= 60.0) {
+		if (distance <= cautionDistance) {
 			return _T("주의");
 		}
 		return _T("안전");
 	}
 
 	// 조도 판정
-	CString GetLightStatus(long lightAdc) {
-		if (lightAdc >= 190) {
+	CString GetLightStatus(long lightAdc, long darkAdc) {
+		if (lightAdc >= darkAdc) {
 			return _T("어두움");
 		}
 		return _T("밝음");
+	}
+
+	// 쉼표, 따옴표 또는 줄바꿈이 있는 값을 CSV 규칙에 맞게 감쌈
+	CString EscapeCsvField(const CString& value) {
+		CString escaped = value;
+		const bool needsQuotes =
+			escaped.FindOneOf(_T(",\"\r\n")) >= 0;
+
+		escaped.Replace(_T("\""), _T("\"\""));
+
+		if (needsQuotes) {
+			escaped = _T("\"") + escaped + _T("\"");
+		}
+
+		return escaped;
+	}
+
+	// Unicode CString을 UTF-8 바이트로 변환해 파일에 기록
+	bool WriteUtf8Text(CFile& file, const CString& text) {
+		if (text.IsEmpty()) {
+			return true;
+		}
+
+		const int byteCount = WideCharToMultiByte(
+			CP_UTF8,
+			WC_ERR_INVALID_CHARS,
+			text.GetString(),
+			text.GetLength(),
+			nullptr,
+			0,
+			nullptr,
+			nullptr
+		);
+
+		if (byteCount <= 0) {
+			return false;
+		}
+
+		std::vector<char> buffer(static_cast<size_t>(byteCount));
+
+		const int convertedCount = WideCharToMultiByte(
+			CP_UTF8,
+			WC_ERR_INVALID_CHARS,
+			text.GetString(),
+			text.GetLength(),
+			buffer.data(),
+			byteCount,
+			nullptr,
+			nullptr
+		);
+
+		if (convertedCount != byteCount) {
+			return false;
+		}
+
+		file.Write(buffer.data(), static_cast<UINT>(buffer.size()));
+		return true;
 	}
 }
 
@@ -184,6 +245,9 @@ BEGIN_MESSAGE_MAP(CSensorLogAnalyzerDlg, CDialogEx)
 	ON_WM_PAINT()
 	ON_WM_QUERYDRAGICON()
 	ON_BN_CLICKED(IDC_BUTTON_OPEN_CSV, &CSensorLogAnalyzerDlg::OnBnClickedButtonOpenCsv)
+	ON_BN_CLICKED(IDC_BUTTON_SAVE, &CSensorLogAnalyzerDlg::OnBnClickedButtonSave)
+	ON_BN_CLICKED(IDC_BUTTON_APPLY_THRESHOLDS, &CSensorLogAnalyzerDlg::OnBnClickedButtonApplyThresholds)
+	ON_BN_CLICKED(IDC_BUTTON_RESET_THRESHOLDS, &CSensorLogAnalyzerDlg::OnBnClickedButtonResetThresholds)
 	ON_NOTIFY(TCN_SELCHANGE, IDC_TAB_DATA_FILTER, &CSensorLogAnalyzerDlg::OnTcnSelchangeTab1)
 END_MESSAGE_MAP()
 
@@ -247,6 +311,10 @@ BOOL CSensorLogAnalyzerDlg::OnInitDialog()
 		0, 0, 0, 0,
 		SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE
 	);
+
+	SetDlgItemText(IDC_EDIT_DANGER_DISTANCE, _T("30"));
+	SetDlgItemText(IDC_EDIT_CAUTION_DISTANCE, _T("60"));
+	SetDlgItemText(IDC_EDIT_DARK_ADC, _T("190"));
 
 	return TRUE;  // 포커스를 컨트롤에 설정하지 않으면 TRUE를 반환합니다.
 }
@@ -432,8 +500,12 @@ void CSensorLogAnalyzerDlg::OnBnClickedButtonOpenCsv() {
 		if (errorMessage.IsEmpty()) {
 			validCount++;
 
-			distanceStatus = GetDistanceStatus(distanceValue);
-			lightStatus = GetLightStatus(lightValue);
+			distanceStatus = GetDistanceStatus(
+				distanceValue,
+				m_dangerDistance,
+				m_cautionDistance
+			);
+			lightStatus = GetLightStatus(lightValue, m_darkAdc);
 		}
 		else {
 			errorCount++;
@@ -469,6 +541,198 @@ void CSensorLogAnalyzerDlg::OnBnClickedButtonOpenCsv() {
 	);
 	AfxMessageBox(message);
 
+}
+
+// 분석 결과 CSV 저장 버튼
+void CSensorLogAnalyzerDlg::OnBnClickedButtonSave() {
+	if (m_sensorRecords.empty()) {
+		AfxMessageBox(_T("먼저 CSV 파일을 불러오세요."));
+		return;
+	}
+
+	CFileDialog saveDialog(
+		FALSE,
+		_T("csv"),
+		_T("sensor_analysis.csv"),
+		OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST,
+		_T("CSV 파일 (*.csv)|*.csv|모든 파일 (*.*)|*.*||"),
+		this
+	);
+
+	if (saveDialog.DoModal() != IDOK) {
+		return;
+	}
+
+	const CString savePath = saveDialog.GetPathName();
+	CFile file;
+	CFileException openError;
+
+	if (!file.Open(
+		savePath,
+		CFile::modeCreate |
+		CFile::modeWrite |
+		CFile::typeBinary |
+		CFile::shareDenyWrite,
+		&openError
+	)) {
+		TCHAR reason[512] = {};
+		openError.GetErrorMessage(reason, _countof(reason));
+
+		CString message;
+		message.Format(
+			_T("분석 결과 파일을 열 수 없습니다.\n%s"),
+			reason
+		);
+		AfxMessageBox(message);
+		return;
+	}
+
+	try {
+		// Excel에서 한글을 바로 인식할 수 있도록 UTF-8 BOM 기록
+		const BYTE utf8Bom[] = { 0xEF, 0xBB, 0xBF };
+		file.Write(utf8Bom, sizeof(utf8Bom));
+
+		if (!WriteUtf8Text(
+			file,
+			_T("row,timestamp,distance_cm,light_adc,distance_status,light_status,error_message\r\n")
+		)) {
+			file.Abort();
+			AfxMessageBox(_T("CSV 헤더를 UTF-8로 변환하지 못했습니다."));
+			return;
+		}
+
+		for (const SensorRecord& record : m_sensorRecords) {
+			CString line;
+			line.Format(_T("%d"), record.rowNumber);
+
+			line += _T(",") + EscapeCsvField(record.timestamp);
+			line += _T(",") + EscapeCsvField(record.distance);
+			line += _T(",") + EscapeCsvField(record.light);
+			line += _T(",") + EscapeCsvField(record.distanceStatus);
+			line += _T(",") + EscapeCsvField(record.lightStatus);
+			line += _T(",") + EscapeCsvField(record.errorMessage);
+			line += _T("\r\n");
+
+			if (!WriteUtf8Text(file, line)) {
+				file.Abort();
+				AfxMessageBox(_T("분석 결과를 UTF-8로 변환하지 못했습니다."));
+				return;
+			}
+		}
+
+		file.Close();
+	}
+	catch (CFileException* exception) {
+		TCHAR reason[512] = {};
+		exception->GetErrorMessage(reason, _countof(reason));
+		exception->Delete();
+		file.Abort();
+
+		CString message;
+		message.Format(
+			_T("분석 결과 저장 중 오류가 발생했습니다.\n%s"),
+			reason
+		);
+		AfxMessageBox(message);
+		return;
+	}
+
+	CString message;
+	message.Format(
+		_T("분석 결과를 저장했습니다.\n%s"),
+		savePath.GetString()
+	);
+	AfxMessageBox(message);
+}
+
+// 화면에 입력한 거리·조도 판정 기준 적용
+void CSensorLogAnalyzerDlg::OnBnClickedButtonApplyThresholds() {
+	CString dangerText;
+	CString cautionText;
+	CString darkAdcText;
+
+	GetDlgItemText(IDC_EDIT_DANGER_DISTANCE, dangerText);
+	GetDlgItemText(IDC_EDIT_CAUTION_DISTANCE, cautionText);
+	GetDlgItemText(IDC_EDIT_DARK_ADC, darkAdcText);
+
+	dangerText.Trim();
+	cautionText.Trim();
+	darkAdcText.Trim();
+
+	double dangerDistance = 0.0;
+	double cautionDistance = 0.0;
+	long darkAdc = 0;
+
+	if (!TryParseDistance(dangerText, dangerDistance) ||
+		dangerDistance <= 0.0 ||
+		dangerDistance > 400.0) {
+		AfxMessageBox(_T("위험 거리는 0보다 크고 400 이하인 숫자여야 합니다."));
+		return;
+	}
+
+	if (!TryParseDistance(cautionText, cautionDistance) ||
+		cautionDistance <= 0.0 ||
+		cautionDistance > 400.0) {
+		AfxMessageBox(_T("주의 거리는 0보다 크고 400 이하인 숫자여야 합니다."));
+		return;
+	}
+
+	if (dangerDistance >= cautionDistance) {
+		AfxMessageBox(_T("위험 거리는 주의 거리보다 작아야 합니다."));
+		return;
+	}
+
+	if (!TryParseAdc(darkAdcText, darkAdc) ||
+		darkAdc < 0 ||
+		darkAdc > 255) {
+		AfxMessageBox(_T("어두움 기준은 0부터 255 사이의 정수여야 합니다."));
+		return;
+	}
+
+	m_dangerDistance = dangerDistance;
+	m_cautionDistance = cautionDistance;
+	m_darkAdc = darkAdc;
+	RecalculateStatuses();
+
+	AfxMessageBox(_T("판정 기준을 적용했습니다."));
+}
+
+// 판정 기준을 초기값으로 복원
+void CSensorLogAnalyzerDlg::OnBnClickedButtonResetThresholds() {
+	m_dangerDistance = 30.0;
+	m_cautionDistance = 60.0;
+	m_darkAdc = 190;
+
+	SetDlgItemText(IDC_EDIT_DANGER_DISTANCE, _T("30"));
+	SetDlgItemText(IDC_EDIT_CAUTION_DISTANCE, _T("60"));
+	SetDlgItemText(IDC_EDIT_DARK_ADC, _T("190"));
+
+	RecalculateStatuses();
+
+	AfxMessageBox(_T("판정 기준을 기본값으로 복원했습니다."));
+}
+
+// 현재 판정 기준으로 유효한 센서 상태를 다시 계산
+void CSensorLogAnalyzerDlg::RecalculateStatuses() {
+
+	for (SensorRecord& record : m_sensorRecords) {
+		if (!record.isValid) {
+			continue;
+		}
+
+		record.distanceStatus = GetDistanceStatus(
+			record.distanceValue,
+			m_dangerDistance,
+			m_cautionDistance
+		);
+		record.lightStatus = GetLightStatus(
+			record.lightValue,
+			m_darkAdc
+		);
+	}
+
+	RefreshSensorList();
+	RefreshGraphs();
 }
 
 // 탭 전환 함수

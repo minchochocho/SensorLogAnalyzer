@@ -51,6 +51,9 @@ protected:
 	DECLARE_MESSAGE_MAP()
 public:
 	afx_msg void OnBnClickedButtonOpenCsv();
+	afx_msg void OnBnClickedButtonSave();
+	afx_msg void OnBnClickedButtonApplyThresholds();
+	afx_msg void OnBnClickedButtonResetThresholds();
 	CListCtrl m_sensorList;
 	afx_msg void OnTcnSelchangeTab1(NMHDR* pNMHDR, LRESULT* pResult);
 	CTabCtrl m_dataFilterTab;
@@ -60,7 +63,11 @@ public:
 
 private:
 	std::vector<SensorRecord> m_sensorRecords;
+	double m_dangerDistance = 30.0;
+	double m_cautionDistance = 60.0;
+	long m_darkAdc = 190;
 
 	void RefreshSensorList();
 	void RefreshGraphs();
+	void RecalculateStatuses();
 };
